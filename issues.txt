@@ -1,0 +1,7 @@
+ISSUES LOG
+==========
+
+1. Monday's swimwear prices showing in rupees instead of expected currency format
+   - Date: 2025-08-05
+   - Status: Open
+   - Description: Product search results for Monday's swimwear are displaying prices in rupees rather than the standard currency format expected by the system
