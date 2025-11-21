@@ -110,7 +110,7 @@ async def search_parallel_recommendations(recommendations: List[str], max_result
         ]
 
 
-async def search_products_direct(user_text: str, max_results: int = 25, budget: float = None, chat_uuid: str = None, context: str = None, gender: str = None) -> Dict[str, Any]:
+async def search_products_direct(user_text: str, max_results: int = 25, budget: float = None, chat_uuid: str = None, context: str = None, gender: str = None, preferences = None) -> Dict[str, Any]:
     """
     Search for products directly based on user's search intent (SEARCH intent).
     
@@ -125,7 +125,7 @@ async def search_products_direct(user_text: str, max_results: int = 25, budget: 
     """
     try:
         # Generate optimized search query
-        query_result = await generate_search_query(user_text, context=context)
+        query_result = await generate_search_query(user_text, context=context, preferences=preferences)
         search_query = query_result.get('search_query', user_text)
         
         logger.info(f"Direct search for: '{search_query}' (original: '{user_text}')")

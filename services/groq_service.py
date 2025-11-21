@@ -13,7 +13,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import GROQ_API_KEY, GROQ_MODEL, MAX_CONCURRENT_REQUESTS
 from prompts import (
     APPAREL_RECOMMENDATION_PROMPT, TEXT_CLASSIFICATION_PROMPT,
-    TEXT_RECOMMENDATION_PROMPT, GENERAL_FASHION_ASSISTANT_PROMPT
+    TEXT_RECOMMENDATION_PROMPT, GENERAL_FASHION_ASSISTANT_PROMPT,
+    PRODUCT_EXPLANATION_PROMPT
 )
 
 logger = logging.getLogger(__name__)
@@ -257,7 +258,7 @@ async def classify_user_intent(user_text: str, has_image: bool = False) -> dict:
             return {"intent": "COMPLEMENT", "reason": f"Error in classification: {str(e)}"}
 
 
-async def generate_search_query(user_text: str, context: str = None) -> dict:
+async def generate_search_query(user_text: str, context: str = None, preferences=None) -> dict:
     """
     Convert user message into an optimized search query for product search.
     
@@ -267,14 +268,28 @@ async def generate_search_query(user_text: str, context: str = None) -> dict:
     Returns:
         Dict with 'search_query'
     """
+    # Format preferences for the prompt
+    preferences_text = ""
+    if preferences and (preferences.moods or preferences.vibes or preferences.occasions):
+        pref_parts = []
+        if preferences.moods:
+            pref_parts.append(f"Moods: {', '.join(preferences.moods)}")
+        if preferences.vibes:
+            pref_parts.append(f"Vibes: {', '.join(preferences.vibes)}")
+        if preferences.occasions:
+            pref_parts.append(f"Occasions: {', '.join(preferences.occasions)}")
+        preferences_text = f"User Preferences: {' | '.join(pref_parts)}"
+
     system_prompt = f'''
     You are an expert at converting user requests into effective product search queries.
 
     User Request: "{user_text}"
     {f"Conversation Context: {context}" if context else ""}
+    {preferences_text}
 
     Your task:
     Generate a clean, optimized search query that will find the best matching products.
+    If user preferences are provided, incorporate them to make the search more targeted.
 
     Guidelines:
     - Make the search query specific but not overly restrictive
@@ -282,6 +297,8 @@ async def generate_search_query(user_text: str, context: str = None) -> dict:
     - If user mentions specific brands, include them
     - Consider synonyms for better matching
     - Use conversation context to better understand the request
+    - Incorporate user preferences (moods, vibes, occasions) when relevant
+      Example: "dress" + "professional" + "confident" → "structured professional dress"
 
     Output format (JSON):
     {{
@@ -454,7 +471,7 @@ async def handle_ambiguous_intent_with_context(user_text: str, conversation_cont
             }
 
 
-async def check_product_relevance(recommendation: str, product_description: str) -> dict:
+async def check_product_relevance(recommendation: str, product_description: str, preferences=None) -> dict:
     """
     Check if a product is relevant to the recommendation using LLM.
     
@@ -465,21 +482,34 @@ async def check_product_relevance(recommendation: str, product_description: str)
     Returns:
         Dict with 'match' boolean and 'reason' string
     """
+    # Format preferences for the prompt
+    preferences_text = ""
+    if preferences and (preferences.moods or preferences.vibes or preferences.occasions):
+        pref_parts = []
+        if preferences.moods:
+            pref_parts.append(f"Moods: {', '.join(preferences.moods)}")
+        if preferences.vibes:
+            pref_parts.append(f"Vibes: {', '.join(preferences.vibes)}")
+        if preferences.occasions:
+            pref_parts.append(f"Occasions: {', '.join(preferences.occasions)}")
+        preferences_text = f"User Preferences: {' | '.join(pref_parts)}"
+
     system_prompt = f'''
     You are an expert fashion stylist evaluating product relevance.
 
-    Your task is to determine if a product matches a styling recommendation.
+    Your task is to determine if a product matches a styling recommendation and user preferences.
 
     Recommendation: {recommendation}
     Product Description: {product_description}
+    {preferences_text}
 
-    Analyze if this product is a good match for the recommendation based on:
-    1. Style compatibility 
-    2. Occasion appropriateness
-    3. Color/pattern coordination potential
-    4. Overall fashion sense
+    Analyze if this product is a good match based on:
+    1. Style compatibility with recommendation
+    2. Alignment with user's desired mood/vibe
+    3. Appropriateness for specified occasions
+    4. Overall preference satisfaction
 
-    Be strict but reasonable in your evaluation. Only approve products that genuinely complement the recommendation.
+    Be strict but reasonable in your evaluation. Only approve products that genuinely complement both the recommendation AND user preferences.
 
     Output format (JSON):
     {{
@@ -511,3 +541,82 @@ async def check_product_relevance(recommendation: str, product_description: str)
             logger.error(f"Error checking product relevance: {str(e)}")
             # Default to allowing the product if LLM fails
             return {"match": True, "reason": f"Error in relevance check: {str(e)}"}
+
+
+async def generate_product_explanation(
+    recommendation: str,
+    product_title: str,
+    context: str = "",
+    preferences = None
+) -> dict:
+    """
+    Generate a 'Why This Works' explanation for a specific product recommendation.
+    
+    Args:
+        recommendation: The stylist recommendation text (e.g., "navy blazer for smart casual")
+        product_title: The actual product title/name
+        context: User context from image analysis, text, conversation history
+        
+    Returns:
+        Dict with explanation fields or empty dict if generation fails
+    """
+    # Format preferences for the prompt
+    preferences_text = ""
+    if preferences and (preferences.moods or preferences.vibes or preferences.occasions):
+        pref_parts = []
+        if preferences.moods:
+            pref_parts.append(f"Moods: {', '.join(preferences.moods)}")
+        if preferences.vibes:
+            pref_parts.append(f"Vibes: {', '.join(preferences.vibes)}")
+        if preferences.occasions:
+            pref_parts.append(f"Occasions: {', '.join(preferences.occasions)}")
+        preferences_text = f"User Preferences: {' | '.join(pref_parts)}"
+
+    system_prompt = f'''
+    You are generating a "Why This Works" explanation for a specific product recommendation.
+    
+    Recommendation: "{recommendation}"
+    Product: "{product_title}"
+    User Context: "{context}"
+    {preferences_text}
+    
+    {PRODUCT_EXPLANATION_PROMPT}
+    
+    IMPORTANT: When user preferences are provided, prioritize explaining how this product aligns with their desired moods, vibes, and occasions. Reference their specific preferences in your explanation fields.
+    
+    Examples of preference-aware explanations:
+    - If moods include "confident" → "This structured blazer projects the confident presence you want"
+    - If vibes include "professional" + "edgy" → "Combines professional polish with subtle edgy details"
+    - If occasions include "work" + "networking" → "Perfect for boardroom meetings and networking events"
+    
+    Focus on explaining why THIS specific product works for the recommendation, user context, AND preferences.
+    '''
+    
+    async with semaphore:
+        try:
+            response = await client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": system_prompt
+                    }
+                ],
+                temperature=0.6,
+                response_format={"type": "json_object"},
+                max_tokens=600
+            )
+            
+            result = json.loads(response.choices[0].message.content)
+            
+            # Basic validation - just check if we have some content
+            if result and isinstance(result, dict):
+                logger.info(f"Generated explanation for product: {product_title[:50]}...")
+                return result
+            else:
+                logger.warning(f"Invalid explanation format for product: {product_title}")
+                return {}
+            
+        except Exception as e:
+            logger.error(f"Error generating product explanation for '{product_title}': {str(e)}")
+            return {}

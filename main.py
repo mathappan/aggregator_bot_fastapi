@@ -9,11 +9,13 @@ from models import (
     UnifiedResponse, ResponseType, ResponseStatus, SectionType, Section, 
     ResponseData, ResponseMetadata, ProductSearchResult, ClarificationOption,
     ApparelRecommendation, CompleteApparelResponse, GeneralFashionResponse, 
-    ErrorResponse, RecommendationWithProducts, CombinedInput, DirectSearchResponse, AmbiguousResponse
+    ErrorResponse, RecommendationWithProducts, CombinedInput, DirectSearchResponse, AmbiguousResponse,
+    UserPreferences
 )
 from config import MAX_FILE_SIZE_MB, ALLOWED_IMAGE_TYPES
 from services.groq_service import analyze_image_with_groq, encode_image_to_base64, classify_user_intent, get_text_recommendations, get_general_fashion_response, generate_context_from_chat_history
 from services.search_service import search_parallel_recommendations, search_products_direct
+from services.explanation_service import add_explanations_to_products, create_explanation_context
 from utils.parsers import parse_recommendation
 
 # Configure logging
@@ -36,6 +38,19 @@ app.add_middleware(
 )
 
 
+def parse_user_preferences(preferences_json: str) -> UserPreferences:
+    """Parse and validate user preferences JSON."""
+    if not preferences_json:
+        return UserPreferences()  # Empty defaults
+    
+    try:
+        preferences_data = json.loads(preferences_json)
+        return UserPreferences(**preferences_data)
+    except (json.JSONDecodeError, Exception) as e:
+        logger.warning(f"Invalid preferences format: {e}")
+        return UserPreferences()  # Graceful fallback
+
+
 @app.post("/recommend-apparel-with-text", response_model=UnifiedResponse)
 async def recommend_apparel_with_text(
     request: Request,
@@ -44,7 +59,8 @@ async def recommend_apparel_with_text(
     text: str = Form(None),
     budget: str = Form(None),
     gender: str = Form(None),
-    chat_history: str = Form(None)
+    chat_history: str = Form(None),
+    preferences: str = Form(None)
 ):
     """
     Upload an image and provide text context to get AI-powered apparel recommendations with product searches.
@@ -94,6 +110,10 @@ async def recommend_apparel_with_text(
         print("budget - ", budget)
         print("gender - ", gender)
         print("has image - ", image is not None)
+        
+        # Parse user preferences
+        preferences_obj = parse_user_preferences(preferences)
+        print("preferences - ", preferences_obj.dict() if preferences_obj else "None")
         
         # Parse chat history and extract history images
         parsed_chat_history = None
@@ -177,10 +197,36 @@ async def recommend_apparel_with_text(
             if not text:
                 raise HTTPException(status_code=400, detail="Text input required for product search")
             
-            search_result = await search_products_direct(text, max_results=25, budget=budget_float, chat_uuid=chat_uuid, context=conversation_context, gender=gender)
+            search_result = await search_products_direct(text, max_results=25, budget=budget_float, chat_uuid=chat_uuid, context=conversation_context, gender=gender, preferences=preferences_obj)
             
             # Convert search results to Pydantic models
-            products = [ProductSearchResult(**product) for product in search_result.get('products', [])]
+            raw_products = search_result.get('products', [])
+            
+            # Generate explanations for search products
+            if raw_products:
+                explanation_context = create_explanation_context(
+                    user_text=text,
+                    conversation_context=conversation_context,
+                    preferences=preferences_obj
+                )
+                
+                # Format products for explanation generation (same structure as COMPLEMENT flow)
+                search_group = [{
+                    'recommendation': search_result.get('search_query', text),
+                    'products': raw_products
+                }]
+                
+                products_with_explanations = await add_explanations_to_products(
+                    search_group,
+                    explanation_context,
+                    max_concurrent=3
+                )
+                
+                # Extract products with explanations
+                explained_products = products_with_explanations[0].get('products', []) if products_with_explanations else raw_products
+                products = [ProductSearchResult(**product) for product in explained_products]
+            else:
+                products = []
             
             # Check if any products were found
             if not products:
@@ -249,9 +295,23 @@ async def recommend_apparel_with_text(
                 gender=gender
             )
             
+            # Generate explanations for products
+            explanation_context = create_explanation_context(
+                user_text=text,
+                conversation_context=conversation_context,
+                image_analysis=recommendation_text if image else None,
+                preferences=preferences_obj
+            )
+            
+            search_results_with_explanations = await add_explanations_to_products(
+                search_results,
+                explanation_context,
+                max_concurrent=3  # Limit concurrent explanations for performance
+            )
+            
             # Convert search results to sections
             sections = []
-            for result in search_results:
+            for result in search_results_with_explanations:
                 products = [ProductSearchResult(**product) for product in result.get('products', [])]
                 
                 # Only create section if products were found

@@ -3,6 +3,45 @@ from pydantic import BaseModel
 from enum import Enum
 
 
+class MoodEnum(str, Enum):
+    """User mood preferences."""
+    CONFIDENT = "confident"
+    RELAXED = "relaxed"
+    BOLD = "bold"
+    CREATIVE = "creative"
+    MINIMAL = "minimal"
+    PLAYFUL = "playful"
+
+
+class VibeEnum(str, Enum):
+    """User vibe preferences."""
+    PROFESSIONAL = "professional"
+    CASUAL = "casual"
+    EDGY = "edgy"
+    ROMANTIC = "romantic"
+    BOHEMIAN = "bohemian"
+    SPORTY = "sporty"
+
+
+class OccasionEnum(str, Enum):
+    """User occasion preferences."""
+    WORK = "work"
+    DATE = "date"
+    CASUAL = "casual"
+    FORMAL = "formal"
+    TRAVEL = "travel"
+    NETWORKING = "networking"
+    AFTER_WORK_DRINKS = "after_work_drinks"
+    WEEKEND = "weekend"
+
+
+class UserPreferences(BaseModel):
+    """User style preferences model."""
+    moods: Optional[List[MoodEnum]] = []
+    vibes: Optional[List[VibeEnum]] = []
+    occasions: Optional[List[OccasionEnum]] = []
+
+
 class ResponseType(str, Enum):
     """Response type enumeration."""
     COMPLEMENT = "COMPLEMENT"
@@ -25,6 +64,19 @@ class SectionType(str, Enum):
     CLARIFICATION = "CLARIFICATION"
 
 
+class WhyThisWorksExplanation(BaseModel):
+    """Explanation model for why a product recommendation works."""
+    summary: str  # max 180 characters - main explanation
+    colour_logic: Optional[str] = None
+    proportion_logic: Optional[str] = None  
+    texture_logic: Optional[str] = None
+    occasion_logic: Optional[str] = None
+    styling_principle: Optional[str] = None
+    silhouette_logic: Optional[str] = None
+    versatility_logic: Optional[str] = None
+    trend_relevance: Optional[str] = None
+
+
 class ProductSearchResult(BaseModel):
     """Product search result model."""
     title: str
@@ -34,6 +86,8 @@ class ProductSearchResult(BaseModel):
     store_name: str
     relevance_score: Optional[float] = None
     llm_filter_reason: Optional[str] = None
+    why_this_works: Optional[WhyThisWorksExplanation] = None
+    recommendation_tag: Optional[str] = None
 
 
 class ClarificationOption(BaseModel):
