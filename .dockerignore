@@ -1,0 +1,54 @@
+# Git files
+.git
+.gitignore
+
+# Python files
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.venv
+env/
+venv/
+ENV/
+
+# IDE files
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+docs/
+
+# Environment files (will be managed via Fly secrets)
+.env*
+
+# Build files
+build/
+dist/
+*.egg-info/
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Other
+issues.txt

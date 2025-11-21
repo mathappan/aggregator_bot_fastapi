@@ -7,7 +7,7 @@ from dotenv import load_dotenv, find_dotenv
 # Load environment variables
 _ = load_dotenv(find_dotenv('.env.txt'))
 
-VOYAGE_API_KEY = os.environ['VOYAGER_API_KEY']
+VOYAGE_API_KEY = os.environ['VOYAGE_API_KEY']
 voyageai.api_key = VOYAGE_API_KEY
 vo_client = voyageai.AsyncClient()
 VOYAGE_MODEL = "voyage-3-large"

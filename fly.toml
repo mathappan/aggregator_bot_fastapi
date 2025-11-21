@@ -1,0 +1,39 @@
+# fly.toml app configuration file generated for fastapi-chatbot-spring-butterfly-8839 on 2025-11-21T20:42:41+05:30
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'fastapi-chatbot-spring-butterfly-8839'
+primary_region = 'dfw'
+
+[build]
+
+[env]
+  GROQ_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
+  MAX_CONCURRENT_REQUESTS = '10'
+  MAX_FILE_SIZE_MB = '10'
+  REDIS_DB = '0'
+  REDIS_PORT = '6379'
+  VOYAGE_MODEL = 'voyage-3-large'
+
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '10s'
+    grace_period = '5s'
+    method = 'GET'
+    path = '/health'
+    protocol = 'http'
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
