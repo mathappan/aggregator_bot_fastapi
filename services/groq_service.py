@@ -14,7 +14,7 @@ from config import GROQ_API_KEY, GROQ_MODEL, MAX_CONCURRENT_REQUESTS
 from prompts import (
     APPAREL_RECOMMENDATION_PROMPT, TEXT_CLASSIFICATION_PROMPT,
     TEXT_RECOMMENDATION_PROMPT, GENERAL_FASHION_ASSISTANT_PROMPT,
-    PRODUCT_EXPLANATION_PROMPT
+    PRODUCT_EXPLANATION_PROMPT, TAG_GENERATION_PROMPT
 )
 
 logger = logging.getLogger(__name__)
@@ -620,3 +620,95 @@ async def generate_product_explanation(
         except Exception as e:
             logger.error(f"Error generating product explanation for '{product_title}': {str(e)}")
             return {}
+
+
+async def generate_contextual_tag(
+    product_title: str,
+    product_description: str,
+    explanation: dict,
+    user_preferences: dict = None,
+    context: str = None
+) -> str:
+    """
+    Generate a contextual tag using Groq LLM based on product and user context.
+    
+    Args:
+        product_title: Title/name of the product
+        product_description: Description of the product
+        explanation: The 'why this works' explanation dict
+        user_preferences: User preferences (moods, vibes, occasions)
+        context: Additional styling context
+        
+    Returns:
+        A concise 2-4 word tag explaining why this product is recommended
+    """
+    async with semaphore:
+        try:
+            # Build context for tag generation
+            context_parts = []
+            
+            # Product info
+            context_parts.append(f"Product: {product_title}")
+            if product_description:
+                context_parts.append(f"Description: {product_description}")
+            
+            # Explanation context
+            if explanation:
+                if explanation.get('summary'):
+                    context_parts.append(f"Why recommended: {explanation['summary']}")
+                if explanation.get('styling_principle'):
+                    context_parts.append(f"Styling principle: {explanation['styling_principle']}")
+                if explanation.get('occasion_logic'):
+                    context_parts.append(f"Occasion fit: {explanation['occasion_logic']}")
+            
+            # User preferences
+            if user_preferences:
+                if user_preferences.get('moods'):
+                    context_parts.append(f"User moods: {', '.join(user_preferences['moods'])}")
+                if user_preferences.get('vibes'):
+                    context_parts.append(f"User vibes: {', '.join(user_preferences['vibes'])}")
+                if user_preferences.get('occasions'):
+                    context_parts.append(f"Target occasions: {', '.join(user_preferences['occasions'])}")
+            
+            # Additional context
+            if context:
+                context_parts.append(f"Context: {context}")
+            
+            full_context = "\n".join(context_parts)
+            
+            response = await client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {
+                        "role": "system", 
+                        "content": TAG_GENERATION_PROMPT
+                    },
+                    {
+                        "role": "user",
+                        "content": full_context
+                    }
+                ],
+                temperature=0.3,  # Lower temperature for more consistent tags
+                max_tokens=20  # Very short response needed
+            )
+            
+            tag = response.choices[0].message.content.strip()
+            
+            # Clean and validate the tag
+            tag = tag.replace('"', '').replace("'", '').strip()
+            
+            # Ensure it's not too long (fallback if LLM doesn't follow instructions)
+            if len(tag.split()) > 4:
+                tag = ' '.join(tag.split()[:4])
+            
+            # Basic validation - ensure we got something reasonable
+            if tag and len(tag) > 0 and len(tag) < 50:
+                logger.info(f"Generated contextual tag: '{tag}' for product: {product_title[:30]}...")
+                return tag
+            else:
+                logger.warning(f"Invalid tag generated for product: {product_title}, using fallback")
+                return "Style Essential"
+            
+        except Exception as e:
+            logger.error(f"Error generating contextual tag for '{product_title}': {str(e)}")
+            return "Style Essential"  # Fallback tag

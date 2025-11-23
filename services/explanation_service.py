@@ -133,21 +133,51 @@ async def add_explanations_to_products(
                 
                 explanations = await asyncio.gather(*explanation_tasks, return_exceptions=True)
                 
-                # Add explanations and tags to products
+                # Add explanations to products first
                 for i, product in enumerate(products):
                     if i < len(explanations) and not isinstance(explanations[i], Exception):
                         explanation = explanations[i]
                         if explanation:
                             product['why_this_works'] = explanation.dict()
-                            
-                            # Generate recommendation tag based on explanation and preferences
-                            try:
-                                tag = generate_recommendation_tag(explanation, context.preferences)
+                
+                # Generate tags in parallel for all products with explanations
+                tag_tasks = []
+                product_indices = []
+                
+                for i, product in enumerate(products):
+                    if i < len(explanations) and not isinstance(explanations[i], Exception):
+                        explanation = explanations[i]
+                        if explanation:
+                            task = generate_recommendation_tag(
+                                explanation, 
+                                context.preferences,
+                                product_title=product.get('title', ''),
+                                product_description=product.get('text_description', ''),
+                                context=context.user_text
+                            )
+                            tag_tasks.append(task)
+                            product_indices.append(i)
+                
+                # Execute all tag generation tasks in parallel
+                if tag_tasks:
+                    try:
+                        tags = await asyncio.gather(*tag_tasks, return_exceptions=True)
+                        
+                        # Apply tags to products
+                        for idx, (product_idx, tag) in enumerate(zip(product_indices, tags)):
+                            product = products[product_idx]
+                            if isinstance(tag, Exception):
+                                logger.error(f"Failed to generate tag for product: {str(tag)}")
+                                product['recommendation_tag'] = "Style Essential"
+                            else:
                                 product['recommendation_tag'] = tag
                                 logger.info(f"Generated tag '{tag}' for product: {product.get('title', 'Unknown')[:30]}...")
-                            except Exception as e:
-                                logger.error(f"Failed to generate tag for product: {str(e)}")
-                                product['recommendation_tag'] = "Style Essential"
+                                
+                    except Exception as e:
+                        logger.error(f"Error in parallel tag generation: {str(e)}")
+                        # Fallback: set default tags for all products
+                        for i in product_indices:
+                            products[i]['recommendation_tag'] = "Style Essential"
                 
                 return group
         
@@ -230,7 +260,13 @@ async def add_explanation_to_single_product(
         
         # Generate recommendation tag
         try:
-            tag = generate_recommendation_tag(explanation, context.preferences)
+            tag = await generate_recommendation_tag(
+                explanation, 
+                context.preferences,
+                product_title=product.title or '',
+                product_description=getattr(product, 'text_description', '') or '',
+                context=context.user_text
+            )
             product.recommendation_tag = tag
             logger.info(f"Generated tag '{tag}' for single product: {product.title[:30]}...")
         except Exception as e:

@@ -1,6 +1,7 @@
 import logging
 from typing import Optional
 from models import WhyThisWorksExplanation, UserPreferences
+from .groq_service import generate_contextual_tag
 
 logger = logging.getLogger(__name__)
 
@@ -44,41 +45,96 @@ CONTENT_KEYWORDS = {
 }
 
 
-def generate_recommendation_tag(
+async def generate_recommendation_tag(
     explanation: WhyThisWorksExplanation, 
-    preferences: Optional[UserPreferences] = None
+    preferences: Optional[UserPreferences] = None,
+    product_title: str = "",
+    product_description: str = "",
+    context: str = None
 ) -> str:
     """
-    Generate a recommendation tag based on explanation content and user preferences.
+    Generate a recommendation tag using Groq LLM based on explanation content and user preferences.
     
     Args:
         explanation: The why this works explanation
         preferences: User style preferences
+        product_title: Product title/name
+        product_description: Product description
+        context: Additional styling context
         
     Returns:
         A concise tag describing why this product was recommended
+    """
+    try:
+        # Convert explanation to dict for LLM processing
+        explanation_dict = {}
+        if explanation:
+            explanation_dict = {
+                'summary': explanation.summary if hasattr(explanation, 'summary') else None,
+                'styling_principle': explanation.styling_principle if hasattr(explanation, 'styling_principle') else None,
+                'occasion_logic': explanation.occasion_logic if hasattr(explanation, 'occasion_logic') else None,
+                'colour_logic': explanation.colour_logic if hasattr(explanation, 'colour_logic') else None,
+                'proportion_logic': explanation.proportion_logic if hasattr(explanation, 'proportion_logic') else None,
+                'versatility_logic': explanation.versatility_logic if hasattr(explanation, 'versatility_logic') else None
+            }
+        
+        # Convert preferences to dict for LLM processing
+        preferences_dict = None
+        if preferences:
+            preferences_dict = {
+                'moods': preferences.moods if hasattr(preferences, 'moods') and preferences.moods else [],
+                'vibes': preferences.vibes if hasattr(preferences, 'vibes') and preferences.vibes else [],
+                'occasions': preferences.occasions if hasattr(preferences, 'occasions') and preferences.occasions else []
+            }
+        
+        # Use Groq LLM to generate contextual tag
+        tag = await generate_contextual_tag(
+            product_title=product_title or "Product",
+            product_description=product_description or "",
+            explanation=explanation_dict,
+            user_preferences=preferences_dict,
+            context=context
+        )
+        
+        logger.info(f"Generated LLM-based tag: '{tag}' for product: {product_title[:30]}...")
+        return tag
+        
+    except Exception as e:
+        logger.error(f"Error generating recommendation tag with LLM: {str(e)}")
+        # Fallback to rule-based system
+        try:
+            fallback_tag = _get_fallback_tag_rule_based(explanation, preferences)
+            logger.info(f"Using rule-based fallback tag: {fallback_tag}")
+            return fallback_tag
+        except Exception as fallback_error:
+            logger.error(f"Fallback tag generation also failed: {str(fallback_error)}")
+            return "Style Essential"
+
+
+def _get_fallback_tag_rule_based(
+    explanation: WhyThisWorksExplanation, 
+    preferences: Optional[UserPreferences] = None
+) -> str:
+    """
+    Fallback rule-based tag generation when LLM fails.
     """
     try:
         # Step 1: Try preference-based tags (highest priority)
         if preferences:
             pref_tag = _get_preference_based_tag(explanation, preferences)
             if pref_tag:
-                logger.info(f"Generated preference-based tag: {pref_tag}")
                 return pref_tag
         
         # Step 2: Try content-based tags
         content_tag = _get_content_based_tag(explanation)
         if content_tag:
-            logger.info(f"Generated content-based tag: {content_tag}")
             return content_tag
         
         # Step 3: Fallback tag
-        fallback_tag = FALLBACK_TAGS[0]  # "Style Essential"
-        logger.info(f"Using fallback tag: {fallback_tag}")
-        return fallback_tag
+        return FALLBACK_TAGS[0]  # "Style Essential"
         
     except Exception as e:
-        logger.error(f"Error generating recommendation tag: {str(e)}")
+        logger.error(f"Error in rule-based fallback: {str(e)}")
         return "Style Essential"
 
 

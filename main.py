@@ -197,10 +197,19 @@ async def recommend_apparel_with_text(
         
         elif intent == "SEARCH":
             # Direct product search with unified response
-            if not text:
-                raise HTTPException(status_code=400, detail="Text input required for product search")
+            if not text and not image:
+                raise HTTPException(status_code=400, detail="Text or image input required for product search")
             
-            search_result = await search_products_direct(text, max_results=25, budget=budget_float, chat_uuid=chat_uuid, context=conversation_context, gender=gender, preferences=preferences_obj)
+            search_result = await search_products_direct(
+                text or "", 
+                max_results=25, 
+                budget=budget_float, 
+                chat_uuid=chat_uuid, 
+                context=conversation_context, 
+                gender=gender, 
+                preferences=preferences_obj,
+                image_base64=image_base64
+            )
             
             # Convert search results to Pydantic models
             raw_products = search_result.get('products', [])
