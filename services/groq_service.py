@@ -215,16 +215,29 @@ async def classify_user_intent(user_text: str, has_image: bool = False) -> dict:
 
     Classify the user's intent into exactly ONE of these categories:
 
-    COMPLEMENT - User wants items that go WITH their outfit/item. Keywords: "what goes with", "complement", "match with", "pair with", "style with", "wear with"
+    SEARCH - User wants to FIND/BUY specific items. Look for:
+    - Descriptions of clothing they want to find: "loose oversized tshirt", "black dress", "running shoes"
+    - Wanting to buy/find items: "I need", "I want", "looking for", "where to buy", "find me", "search for"
+    - Describing desired items with context: "tshirt that pairs well with jeans", "dress for work"
 
-    SEARCH - User wants to FIND similar or same items. Keywords: "find", "looking for", "where to buy", "similar to", "like this", "search for", "want this"
+    COMPLEMENT - User wants items that go WITH something they ALREADY HAVE. Look for:
+    - "What goes with my...", "what should I wear with this..."
+    - "I have X, what matches?", "styling advice for my..."
+    - Clear indication they own the item and want accessories/complements
 
     AMBIGUOUS - Cannot determine intent clearly, or the request is too vague
 
-    Rules:
-    - If user has an image and NO text, classify as COMPLEMENT
-    - Be decisive - choose the most likely intent based on language patterns
-    - Only use AMBIGUOUS for genuinely unclear requests
+    Priority Rules:
+    1. If user describes a clothing item they want (with or without context), classify as SEARCH
+    2. If user has an image and NO text, classify as COMPLEMENT  
+    3. Only use COMPLEMENT when user clearly indicates they already own something
+    4. When in doubt between SEARCH and COMPLEMENT, choose SEARCH
+
+    Examples:
+    - "loose oversized tshirt that pairs well with slim jeans" → SEARCH (wants the tshirt)
+    - "what goes with my black dress?" → COMPLEMENT (has the dress)
+    - "I need a blazer for work meetings" → SEARCH (wants the blazer)
+    - "styling tips for this outfit" + image → COMPLEMENT (has the outfit)
 
     Output format (JSON):
     {{
