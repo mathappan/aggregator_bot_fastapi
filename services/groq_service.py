@@ -294,28 +294,46 @@ async def generate_search_query(user_text: str, context: str = None, preferences
         preferences_text = f"User Preferences: {' | '.join(pref_parts)}"
 
     system_prompt = f'''
-    You are an expert at converting user requests into effective product search queries.
+    You are an expert at converting user requests into e-commerce product search queries that will match actual product listing descriptions.
 
     User Request: "{user_text}"
     {f"Conversation Context: {context}" if context else ""}
     {preferences_text}
 
+    CRITICAL:
+    Your search query must use only terms that appear in real product listings, not personal styling or abstract fashion language.
+
     Your task:
-    Generate a clean, optimized search query that will find the best matching products.
-    If user preferences are provided, incorporate them to make the search more targeted.
+    Generate one concise search query made up of only:
+    - Product types (t-shirt, jeans, blazer, dress, sneakers, etc.)
+    - Materials (cotton, denim, linen, leather, satin, etc.)
+    - Styles / silhouettes (oversized, cropped, straight-leg, midi, slim-fit, etc.)
+    - Actual color names found in listings (black, navy, olive, burgundy, ivory, etc.)
+    - Common product descriptors (button-down, ribbed, pleated, V-neck, high-waisted, etc.)
 
-    Guidelines:
-    - Make the search query specific but not overly restrictive
-    - Remove filler words and focus on searchable terms
-    - If user mentions specific brands, include them
-    - Consider synonyms for better matching
-    - Use conversation context to better understand the request
-    - Incorporate user preferences (moods, vibes, occasions) when relevant
-      Example: "dress" + "professional" + "confident" → "structured professional dress"
+    DO NOT include:
+    ❌ Personal attributes: cool/warm/neutral undertone, petite/curvy/athletic, broad shoulders, narrow waist, etc.
+    ❌ Styling advice: flattering, complements/suits/enhances, makes me look/hides/accentuates
+    ❌ Abstract concepts: elegant, classy, confidence-boosting, sexy, age-appropriate
 
-    Output format (JSON):
+    These do not appear in product listings.
+
+    How to handle personal styling context:
+    If the context mentions things like undertone, body type, color season, lifestyle or occasion, you MUST:
+    - Translate it into real product attributes using your general fashion knowledge
+    - Do NOT map it to a single fixed color or item
+    - Choose the most reasonable and commonly used product-listing attributes instead
+
+    Examples:
+    - "Cool undertone" → infer suitable real colors (do not mention undertone)
+    - "Petite" → infer cuts like cropped/high-waisted/mini/ankle-length
+    - "Office" → infer tailored/structured/minimal products
+
+    You are NOT to explain the logic. Only output the result.
+
+    Output format (MUST BE VALID JSON):
     {{
-      "search_query": "optimized search terms"
+      "search_query": "product-focused search terms only"
     }}
     '''
     
